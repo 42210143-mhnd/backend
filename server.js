@@ -9,14 +9,13 @@ import nodemailer from "nodemailer"
 import multer from "multer"
 import { verifyAdmin, verifyStudent } from "./middleware.js"
 import WebSocket from "ws"
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY, 
-});
 
 dotenv.config()
 const app = express()
+
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 const supabase = createClient(
     process.env.SUPABASE_URL,
@@ -46,12 +45,15 @@ app.use(cors({
 app.use(express.json())
 app.use(cookieParser())
 
-app.post("/api/chat", verifyStudent, async (req, res) => {
+
+
+
+app.post("/api/chat", async (req, res) => {
     try {
         const { question } = req.body;
         if (!question) return res.status(400).json({ message: "You need to ask a question." });
 
-
+        // Define the Knowledge Base
         const megaKnowledgeBase = `
       
         ===================================================================
@@ -94,32 +96,34 @@ app.post("/api/chat", verifyStudent, async (req, res) => {
         A: No, appointments are strictly tied to your authenticated student profile and University ID. Third-party representation is not permitted.
         `;
 
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                { 
-                    role: "system", 
-                    content: `You are the ultimate automated student support assistant. 
-                    You must ONLY answer user inquiries using the information extracted from the KNOWLEDGE MATRIX below.
-                    
-                    CRITICAL RULES:
-                    1. If the answer cannot be found explicitly within the modules below, you must reply word-for-word: "I'm sorry, I am only programmed to answer questions regarding portal services, technical errors, and general administrative guidelines."
-                    2. Do not use any pre-existing outside knowledge or facts.
-                    3. If a user asks about an administrative service, refer strictly to the live records in Module 1.
-                    4. Keep answers clear, direct, and authoritative.
-                    
-                    KNOWLEDGE MATRIX:
-                    ${megaKnowledgeBase}` 
-                },
-                { role: "user", content: question }
-            ],
-            temperature: 0.1, 
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-2.5-flash",
+            systemInstruction: `You are the ultimate automated student support assistant. 
+            You must ONLY answer user inquiries using the information extracted from the KNOWLEDGE MATRIX below.
+            
+            CRITICAL RULES:
+            1. If the answer cannot be found explicitly within the matrix, you must reply: "I'm sorry, I am only programmed to answer questions regarding portal services, technical errors, and general administrative guidelines."
+            2. Do not use outside knowledge.
+            3. Keep answers clear, direct, and authoritative.
+            4. If he greets you, greet back politely but concisely. Do not use the greeting as an opportunity to provide additional information.
+            
+            KNOWLEDGE MATRIX:
+            ${megaKnowledgeBase}` 
         });
 
-        return res.status(200).json({ reply: completion.choices[0].message.content });
+        // Generate response
+        const result = await model.generateContent(question);
+        const response = await result.response;
+        const text = response.text();
+
+        return res.status(200).json({ reply: text });
 
     } catch (error) {
-        return res.status(500).json({ message: "The assistant is currently unavailable." });
+        console.error("Gemini Chat Error:", error);
+        return res.status(500).json({ 
+            message: "The assistant is currently unavailable.", 
+            error: error.message 
+        });
     }
 });
 
@@ -305,6 +309,7 @@ app.post("/admin/reject/:i", verifyAdmin, async (req, res) => {
 
         return res.status(200).json({ message: "Booking was rejected successfully" })
     } catch (error) {
+        conso
         return res.status(500).json({ message: "Internal server error" })
     }
 })

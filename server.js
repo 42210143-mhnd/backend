@@ -60,10 +60,10 @@ app.post("/api/chat", async (req, res) => {
         MODULE 1: GENERAL PORTAL & ACCOUNT RULES (FAQS)
         ===================================================================
         Q: How do I create an account?
-        A: Click "Register" on the portal gateway. You must provide your Full Name, official University ID, and a valid email address.
+        A: Click "Register" on the portal gateway. You must provide your Full Name, and a valid email address.
         
         Q: What should I do if my account gets locked or I see an error?
-        A: If you see "Session expired" or authentication errors, clear your browser cookies and cache, or log out and log back in from the front gate. If your University ID is already in use, contact the IT administration desk immediately.
+        A: If you see "Session expired" or authentication errors, clear your browser cookies and cache, or log out and log back in from the front gate. If your email is already in use, contact the IT administration desk immediately.
 
         Q: Can I change my password or profile details directly from the booking screen?
         A: No, profile and password adjustments must be handled through central IT support. The booking screen is explicitly reserved for submission tracking and scheduling.
@@ -84,16 +84,16 @@ app.post("/api/chat", async (req, res) => {
         A: No, once a booking request is submitted, it is locked in the system for administrative review. If you made a critical mistake, wait for the admin to reject it or contact them directly to clear it out.
 
         ===================================================================
-        MODULE 3: GENERAL UNIVERSITY & OFFICE POLICIES
+        MODULE 3: GENERAL OFFICE POLICIES
         ===================================================================
         Q: What are the physical operational hours for appointments?
         A: Administration offices are open Monday through Friday, from 09:00 AM to 04:00 PM. Offices are closed on weekends and official academic holidays.
 
         Q: What do I need to bring to my scheduled appointment?
-        A: You must bring your physical University ID card and the original hard copies of all documents you uploaded to the portal for verification purposes.
+        A: You must bring the original hard copies of all documents you uploaded to the portal for verification purposes.
 
         Q: Can someone else attend my appointment on my behalf?
-        A: No, appointments are strictly tied to your authenticated student profile and University ID. Third-party representation is not permitted.
+        A: No, appointments are strictly tied to your authenticated student profile. Third-party representation is not permitted.
         `;
 
         const model = genAI.getGenerativeModel({ 
@@ -234,7 +234,7 @@ app.post("/admin/approve/:i", verifyAdmin, async (req, res) => {
         if (updateError) throw updateError
 
         const mailOptions = {
-            from: `"University Services" <${process.env.EMAIL_USER}>`,
+            from: `"Ministry of Education Services" <${process.env.EMAIL_USER}>`,
             to: booking.students.email,
             subject: `Update on your ${booking.services.name} Application`,
             html: `
@@ -289,7 +289,7 @@ app.post("/admin/reject/:i", verifyAdmin, async (req, res) => {
         if (updateError) throw updateError
 
         const mailOptions = {
-            from: `"University Services" <${process.env.EMAIL_USER}>`,
+            from: `"Ministry of Education Services" <${process.env.EMAIL_USER}>`,
             to: booking.students.email,
             subject: `Update on your ${booking.services.name} Application`,
             html: `
@@ -411,19 +411,19 @@ app.get('/api/student/verify', verifyStudent, (req, res) => {
 
 app.post("/api/student/register", async (req, res) => {
     try {
-        const { full_name, email, password, university_id } = req.body
+        const { full_name, email, password } = req.body
 
-        if (!full_name || !email || !password || !university_id) {
+        if (!full_name || !email || !password) {
             return res.status(400).json({ message: "All fields are required." })
         }
 
         const { data: existingStudent } = await supabase
             .from('students')
             .select('id')
-            .or(`email.eq.${email.toLowerCase().trim()},university_id.eq.${university_id.trim()}`)
+            .or(`email.eq.${email.toLowerCase().trim()}`)
 
         if (existingStudent && existingStudent.length > 0) {
-            return res.status(400).json({ message: "Email or University ID already in use." })
+            return res.status(400).json({ message: "Email already in use." })
         }
 
         const hashedPassword = await bcrypt.hash(password, 10)
@@ -433,8 +433,7 @@ app.post("/api/student/register", async (req, res) => {
             .insert([{
                 full_name: full_name.trim(),
                 email: email.toLowerCase().trim(),
-                password: hashedPassword,
-                university_id: university_id.trim()
+                password: hashedPassword
             }])
             .select('id, full_name, email')
             .single()
